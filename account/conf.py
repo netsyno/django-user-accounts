@@ -1,13 +1,13 @@
 from __future__ import unicode_literals
 
-from django.conf import settings
+from django.conf import settings as user_settings
 from django.core.exceptions import ImproperlyConfigured
+
 from django.utils import importlib
+from django.utils.functional import LazyObject
 from django.utils.translation import get_language_info
 
 import pytz
-
-from appconf import AppConf
 
 
 def load_path_attr(path):
@@ -24,43 +24,57 @@ def load_path_attr(path):
     return attr
 
 
-class AccountAppConf(AppConf):
+class Settings(object):
+    pass
 
-    OPEN_SIGNUP = True
-    LOGIN_URL = "account_login"
-    SIGNUP_REDIRECT_URL = "/"
-    LOGIN_REDIRECT_URL = "/"
-    LOGOUT_REDIRECT_URL = "/"
-    PASSWORD_CHANGE_REDIRECT_URL = "account_password"
-    PASSWORD_RESET_REDIRECT_URL = "account_login"
-    REMEMBER_ME_EXPIRY = 60 * 60 * 24 * 365 * 10
-    USER_DISPLAY = lambda user: user.username
-    CREATE_ON_SAVE = True
-    EMAIL_UNIQUE = True
-    EMAIL_CONFIRMATION_REQUIRED = False
-    EMAIL_CONFIRMATION_EMAIL = True
-    EMAIL_CONFIRMATION_EXPIRE_DAYS = 3
-    EMAIL_CONFIRMATION_ANONYMOUS_REDIRECT_URL = "account_login"
-    EMAIL_CONFIRMATION_AUTHENTICATED_REDIRECT_URL = None
-    EMAIL_CONFIRMATION_URL = "account_confirm_email"
-    SETTINGS_REDIRECT_URL = "account_settings"
-    NOTIFY_ON_PASSWORD_CHANGE = True
-    DELETION_MARK_CALLBACK = "account.callbacks.account_delete_mark"
-    DELETION_EXPUNGE_CALLBACK = "account.callbacks.account_delete_expunge"
-    DELETION_EXPUNGE_HOURS = 48
-    HOOKSET = "account.hooks.AccountDefaultHookSet"
-    TIMEZONES = list(zip(pytz.all_timezones, pytz.all_timezones))
-    LANGUAGES = [
+
+class DefaultSettings():
+    ACCOUNT_OPEN_SIGNUP = True
+    ACCOUNT_LOGIN_URL = "account_login"
+    ACCOUNT_SIGNUP_REDIRECT_URL = "/"
+    ACCOUNT_LOGIN_REDIRECT_URL = "/"
+    ACCOUNT_LOGOUT_REDIRECT_URL = "/"
+    ACCOUNT_PASSWORD_CHANGE_REDIRECT_URL = "account_password"
+    ACCOUNT_PASSWORD_RESET_REDIRECT_URL = "account_login"
+    ACCOUNT_REMEMBER_ME_EXPIRY = 60 * 60 * 24 * 365 * 10
+    ACCOUNT_USER_DISPLAY = lambda user: user.username
+    ACCOUNT_CREATE_ON_SAVE = True
+    ACCOUNT_EMAIL_UNIQUE = True
+    ACCOUNT_EMAIL_CONFIRMATION_REQUIRED = False
+    ACCOUNT_EMAIL_CONFIRMATION_EMAIL = True
+    ACCOUNT_EMAIL_CONFIRMATION_EXPIRE_DAYS = 3
+    ACCOUNT_EMAIL_CONFIRMATION_ANONYMOUS_REDIRECT_URL = "account_login"
+    ACCOUNT_EMAIL_CONFIRMATION_AUTHENTICATED_REDIRECT_URL = None
+    ACCOUNT_EMAIL_CONFIRMATION_URL = "account_confirm_email"
+    ACCOUNT_SETTINGS_REDIRECT_URL = "account_settings"
+    ACCOUNT_NOTIFY_ON_PASSWORD_CHANGE = True
+    ACCOUNT_DELETION_MARK_CALLBACK = "account.callbacks.account_delete_mark"
+    ACCOUNT_DELETION_EXPUNGE_CALLBACK = "account.callbacks.account_delete_expunge"
+    ACCOUNT_DELETION_EXPUNGE_HOURS = 48
+    ACCOUNT_HOOKSET = "account.hooks.AccountDefaultHookSet"
+    ACCOUNT_TIMEZONES = list(zip(pytz.all_timezones, pytz.all_timezones))
+    ACCOUNT_LANGUAGES = [
         (code, get_language_info(code).get("name_local"))
-        for code, lang in settings.LANGUAGES
+        for code, lang in user_settings.LANGUAGES
     ]
-    USE_AUTH_AUTHENTICATE = False
+    ACCOUNT_USE_AUTH_AUTHENTICATE = False
 
-    def configure_deletion_mark_callback(self, value):
-        return load_path_attr(value)
 
-    def configure_deletion_expunge_callback(self, value):
-        return load_path_attr(value)
+class LazySettings(LazyObject):
+    def _setup(self):
+        self._wrapped = Settings()
+        defaults = DefaultSettings()
+        for obj in (defaults, user_settings):
+            for attr in dir(obj):
+                if attr == attr.upper():
+                    val = getattr(obj, attr)
+                    if (attr == 'ACCOUNT_DELETION_MARK_CALLBACK'):
+                        val = load_path_attr(val)
+                    if (attr == 'ACCOUNT_DELETION_EXPUNGE_CALLBACK'):
+                        val = load_path_attr(val)
+                    if (attr == 'ACCOUNT_HOOKSET'):
+                        val = load_path_attr(val)()
+                    setattr(self, attr, val)
 
-    def configure_hookset(self, value):
-        return load_path_attr(value)()
+
+settings = LazySettings()
